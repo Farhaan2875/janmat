@@ -1,0 +1,71 @@
+{
+  "combined_test": {
+    "accuracy": 0.6697,
+    "macro_f1": 0.6665,
+    "confusion_matrix": [
+      [
+        3201,
+        523,
+        495
+      ],
+      [
+        1080,
+        2167,
+        725
+      ],
+      [
+        742,
+        427,
+        2726
+      ]
+    ]
+  },
+  "per_source": {
+    "imdb": {
+      "n": 1499,
+      "accuracy": 0.7632,
+      "macro_f1": 0.761
+    },
+    "sst5": {
+      "n": 2210,
+      "accuracy": 0.6484,
+      "macro_f1": 0.5435
+    },
+    "tweet_eval": {
+      "n": 3000,
+      "accuracy": 0.5687,
+      "macro_f1": 0.5635
+    },
+    "twitter_fin": {
+      "n": 2377,
+      "accuracy": 0.7194,
+      "macro_f1": 0.6339
+    },
+    "yelp": {
+      "n": 3000,
+      "accuracy": 0.7003,
+      "macro_f1": 0.5757
+    }
+  },
+  "econsultation_sample": {
+    "accuracy": 0.7083,
+    "macro_f1": 0.6716,
+    "confusion_matrix": [
+      [
+        147,
+        17,
+        4
+      ],
+      [
+        29,
+        70,
+        2
+      ],
+      [
+        32,
+        21,
+        38
+      ]
+    ]
+  }
+}

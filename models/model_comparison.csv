@@ -1,0 +1,5 @@
+model,overall_acc,overall_macro_f1,imdb_acc,sst5_acc,tweet_eval_acc,twitter_fin_acc,yelp_acc,econsult_sample_acc
+TF-IDF + Logistic Regression,0.707,0.706,0.794,0.678,0.584,0.762,0.716,0.642
+Bi-LSTM,0.679,0.672,0.758,0.648,0.576,0.692,0.722,0.708
+Pretrained RoBERTa (no training needed),0.687,0.685,0.68,0.676,0.708,0.674,0.698,0.9
+Ensemble (average of all available models),0.749,0.745,0.806,0.738,0.684,0.75,0.768,0.856
