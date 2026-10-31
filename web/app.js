@@ -2,6 +2,24 @@ const state = { result: null };
 const $ = (id) => document.getElementById(id);
 const palette = { negative: '#9b4938', neutral: '#8a7966', positive: '#526b4b' };
 const MODEL_NAME = 'TF-IDF + Logistic Regression (browser)';
+const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:5000' : '';
+let serverModels = [];
+
+async function loadModels() {
+  try {
+    const response = await fetch(`${API_BASE}/api/models`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Model server unavailable.');
+    serverModels = data.models;
+    $('model').replaceChildren(...serverModels.map((name) => new Option(name, name)));
+    $('model').disabled = false;
+    setStatus('Ready for a record');
+  } catch (error) {
+    $('model').replaceChildren(new Option(MODEL_NAME, MODEL_NAME));
+    $('model').disabled = false;
+    showError('Python model server is unavailable. Browser baseline is available; run run_janmat.bat for Bi-LSTM and BERT.');
+  }
+}
 
 function cleanText(text) {
   return String(text).toLowerCase()
@@ -115,8 +133,25 @@ function makeTopics(rows) {
 }
 
 async function analyze() {
-  showError(''); setStatus('Reading the record…'); $('analyze').disabled = true;
+  showError(''); $('analyze').disabled = true;
+  const selectedModel = $('model').value;
+  setStatus(`Analysing with ${selectedModel}… first model use may take a little while.`);
+  $('analyze').textContent = 'Analysing…';
   try {
+    if (serverModels.includes(selectedModel)) {
+      const form = new FormData();
+      form.append('model', selectedModel);
+      form.append('topics', $('topics').value);
+      if ($('source').value === 'upload') {
+        if (!$('file').files[0]) throw new Error('Choose a CSV record first.');
+        form.append('file', $('file').files[0]);
+      }
+      const response = await fetch(`${API_BASE}/api/analyze`, { method: 'POST', body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'The model could not analyse the record.');
+      render(result);
+      return;
+    }
     const comments = await rowsFromSource();
     if (comments.length < 1) throw new Error('The CSV does not contain any comments.');
     const rows = comments.map((item) => ({ ...item, ...predictComment(item.comment) }));
@@ -125,12 +160,33 @@ async function analyze() {
     const positive = rows.filter((row) => row.sentiment === 'positive').slice(0, 3).map((row) => row.comment).join(' ');
     render({ model: MODEL_NAME, total: rows.length, average_confidence: rows.reduce((sum, row) => sum + row.confidence, 0) / rows.length,
       counts, topics: makeTopics(rows), summary: { concerns: negative, support: positive }, rows });
-  } catch (error) { showError(error.message); setStatus('Could not read the record'); }
-  finally { $('analyze').disabled = false; }
+  } catch (error) { showError(error.message || 'The record could not be analysed.'); setStatus('Could not read the record'); }
+  finally {
+    $('analyze').disabled = false;
+    $('analyze').innerHTML = 'Open the record <span>→</span>';
+  }
 }
 
-function classify() {
+async function classify() {
   const comment = $('single-comment').value.trim(); if (!comment) return;
+  const selectedModel = $('model').value;
+  if (serverModels.includes(selectedModel)) {
+    try {
+      const response = await fetch(`${API_BASE}/api/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment, model: selectedModel }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'The model could not classify the comment.');
+      const result = $('single-result');
+      result.hidden = false; result.className = `single-result ${data.sentiment}`;
+      result.innerHTML = `<b>${data.sentiment[0].toUpperCase() + data.sentiment.slice(1)}</b> · ${Math.round(data.confidence * 100)}% confidence`;
+    } catch (error) {
+      showError(error.message);
+    }
+    return;
+  }
   const data = predictComment(comment); const result = $('single-result');
   result.hidden = false; result.className = `single-result ${data.sentiment}`;
   result.innerHTML = `<b>${data.sentiment[0].toUpperCase() + data.sentiment.slice(1)}</b> · ${Math.round(data.confidence * 100)}% confidence`;
@@ -145,8 +201,8 @@ function download() {
   link.download = 'janmat_results.csv'; link.click(); URL.revokeObjectURL(link.href);
 }
 
-$('model').add(new Option(MODEL_NAME, MODEL_NAME));
 $('source').addEventListener('change', () => { const upload = $('source').value === 'upload'; $('file').hidden = !upload; $('file-name').textContent = upload ? 'No file selected' : 'Using the built-in consultation record'; });
 $('file').addEventListener('change', () => { $('file-name').textContent = $('file').files[0]?.name || 'No file selected'; });
 $('analyze').addEventListener('click', analyze); $('classify').addEventListener('click', classify); $('download').addEventListener('click', download);
 $('sentiment-filter').addEventListener('change', renderRows); $('search').addEventListener('input', renderRows);
+loadModels();
