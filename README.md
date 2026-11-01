@@ -63,7 +63,9 @@ by the training scripts, prediction code, and dashboards.
 
 This is the lightweight baseline model.
 
-1. The comment is cleaned and converted to lowercase.
+1. The comment is cleaned, converted to lowercase, and common chat slang is
+   expanded (for example, `wtf` becomes `unacceptable` and `lit`/`fire` become
+   `excellent`).
 2. `TfidfVectorizer` converts words and word pairs into numerical features.
 3. Logistic Regression calculates a score for each sentiment class.
 4. The class with the highest probability becomes the prediction.
@@ -272,6 +274,31 @@ Streamlit components.
 - `src/train_bert.py` optionally fine-tunes DistilBERT or another transformer.
 - `src/evaluate.py` calculates metrics and writes model reports.
 - `src/compare_models.py` compares available models across datasets.
+
+### 2.5 Training datasets
+
+The sentiment models are trained from several public datasets combined into
+one three-class dataset. The loader maps every source to the shared label
+order `0 = negative`, `1 = neutral`, `2 = positive`:
+
+| Dataset | Purpose | Label mapping |
+|---|---|---|
+| `cardiffnlp/tweet_eval` (`sentiment`) | Real-world social-media posts and slang | Negative, neutral, positive |
+| `zeroshot/twitter-financial-news-sentiment` | Short financial and market-related posts | Bearish → negative, neutral → neutral, bullish → positive |
+| `SetFit/sst5` | Stanford Sentiment Treebank sentences | Very negative/negative → negative, neutral → neutral, positive/very positive → positive |
+| `takala/financial_phrasebank` | Formal financial-news sentences | Negative, neutral, positive |
+| `Yelp/yelp_review_full` | Longer customer reviews | 1–2 stars → negative, 3 stars → neutral, 4–5 stars → positive |
+| `stanfordnlp/imdb` | Longer movie reviews | Negative → negative, positive → positive |
+
+Each source is capped during loading so a large dataset does not dominate
+training. Dataset downloads are optional: if a source cannot be downloaded,
+the loader skips it and continues with the remaining sources. In the latest
+training run, `financial_phrasebank` was skipped because the installed
+Hugging Face datasets version no longer supports its dataset script.
+
+Additional labelled comments can be added under `data/extra_labeled/`; these
+are included as `own_data` and repeated during training to emphasize the
+consultation domain.
 
 ---
 

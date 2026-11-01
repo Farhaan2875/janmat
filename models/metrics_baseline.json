@@ -1,30 +1,30 @@
 {
   "combined_test": {
-    "accuracy": 0.6931,
-    "macro_f1": 0.6935,
+    "accuracy": 0.6921,
+    "macro_f1": 0.6924,
     "confusion_matrix": [
       [
-        2951,
-        882,
-        386
+        2946,
+        879,
+        396
       ],
       [
-        696,
-        2636,
-        640
+        707,
+        2632,
+        633
       ],
       [
-        504,
-        601,
-        2790
+        502,
+        605,
+        2788
       ]
     ]
   },
   "per_source": {
     "imdb": {
       "n": 1499,
-      "accuracy": 0.8019,
-      "macro_f1": 0.5349
+      "accuracy": 0.8005,
+      "macro_f1": 0.5342
     },
     "sst5": {
       "n": 2210,
@@ -33,38 +33,38 @@
     },
     "tweet_eval": {
       "n": 3000,
-      "accuracy": 0.5867,
-      "macro_f1": 0.5676
+      "accuracy": 0.5837,
+      "macro_f1": 0.5646
     },
     "twitter_fin": {
-      "n": 2377,
-      "accuracy": 0.7602,
-      "macro_f1": 0.6657
+      "n": 2379,
+      "accuracy": 0.7604,
+      "macro_f1": 0.6674
     },
     "yelp": {
       "n": 3000,
-      "accuracy": 0.7273,
-      "macro_f1": 0.6547
+      "accuracy": 0.7267,
+      "macro_f1": 0.6549
     }
   },
   "econsultation_sample": {
-    "accuracy": 0.6417,
-    "macro_f1": 0.5794,
+    "accuracy": 0.6528,
+    "macro_f1": 0.583,
     "confusion_matrix": [
       [
-        123,
-        45,
+        129,
+        39,
         0
       ],
       [
-        13,
-        88,
+        14,
+        87,
         0
       ],
       [
-        16,
-        55,
-        20
+        18,
+        54,
+        19
       ]
     ]
   }
