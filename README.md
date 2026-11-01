@@ -464,3 +464,206 @@ for demonstration and transfer testing, not model training.
 - Human judgement remains necessary before using results for policy decisions.
 
 JanMat is a reading aid for consultation data, not an automated decision-maker.
+
+---
+
+## 8. Complete machine-learning pipeline
+
+This section describes the complete path from an input comment to the result
+shown in JanMat.
+
+### 8.1 Data collection and label normalization
+
+During training, `src/data_loader.py` downloads and combines public sentiment
+datasets:
+
+1. TweetEval for manually labelled social-media language and slang.
+2. Sentiment140 for a large amount of informal Twitter language. Its labels
+   are distant-supervision labels generated from emoticons, so they are useful
+   but noisy. Sentiment140 supplies negative and positive examples, not a
+   genuine neutral class.
+3. Twitter Financial News Sentiment for short financial posts.
+4. SST-5 for short sentence-level sentiment.
+5. Financial PhraseBank for formal financial sentences when supported by the
+   installed datasets library.
+6. Yelp reviews and IMDB reviews for longer positive and negative text.
+7. Optional user data from `data/extra_labeled/`.
+
+All source labels are converted to the shared three-class scheme:
+
+```text
+0 = negative
+1 = neutral
+2 = positive
+```
+
+Large sources are capped and shuffled. Training, validation, and test splits
+are kept separate. Duplicate training text is removed for public sources,
+while optional user data is deliberately repeated to emphasize the
+consultation domain.
+
+### 8.2 Text preprocessing
+
+The original comment is converted into the representation expected by the
+selected model:
+
+- URLs and `@mentions` are removed.
+- The standard cleaner lowercases text, removes unsupported symbols, and
+  collapses whitespace.
+- The transformer cleaner preserves case and punctuation because transformers
+  can use that context.
+- Common Internet slang is expanded before inference and training. Examples
+  include `wtf` → `unacceptable`, `trash` → `terrible`, `lit`/`fire`/`slaps`
+  → `excellent`, `ngl` → `honestly`, and `mid` → `mediocre`.
+- Negation words such as `not` and `no` are intentionally retained.
+
+The same preprocessing is used for a model during training and prediction.
+
+### 8.3 Sentiment model 1: TF-IDF + Logistic Regression
+
+This is the lightweight baseline and is saved as
+`models/baseline_tfidf_lr.joblib`.
+
+1. `TfidfVectorizer` builds a vocabulary from the training comments.
+2. Each comment becomes a sparse numerical vector containing weighted
+   unigrams and bigrams (`ngram_range=(1, 2)`).
+3. TF-IDF gives higher weight to terms that are important in a comment but
+   less common across the corpus.
+4. Logistic Regression learns three class decision scores from those vectors.
+5. `predict_proba` returns negative, neutral, and positive probabilities.
+
+This model does **not** use a pretrained embedding model. Its representation
+is a sparse TF-IDF feature vector, and slang support comes from the added
+slang normalization plus Twitter training data.
+
+### 8.4 Sentiment model 2: Bi-LSTM
+
+The Bi-LSTM is saved as `models/bilstm.keras`.
+
+1. Keras `TextVectorization` builds a vocabulary of up to 20,000 words and
+   converts each comment into a sequence of integer token IDs.
+2. The integer IDs enter a trainable Keras `Embedding` layer with 128
+   dimensions. These are learned word embeddings, not downloaded pretrained
+   embeddings.
+3. A bidirectional LSTM with 64 units reads the sequence from left to right
+   and right to left, allowing it to use word order and nearby context.
+4. Dropout reduces overfitting.
+5. Dense ReLU and three-way softmax layers produce the sentiment
+   probabilities.
+
+Comments are truncated or padded to 80 tokens. Class-weighted training helps
+when the combined datasets contain unequal numbers of labels.
+
+### 8.5 Sentiment model 3: fine-tuned DistilBERT
+
+The optional fine-tuned transformer is created by `src/train_bert.py` and
+stored in `models/bert/`.
+
+1. A Hugging Face `AutoTokenizer` splits text into subword tokens, so unseen
+   words and many slang spellings can be represented as subword pieces.
+2. The default base model is `distilbert-base-uncased`.
+3. DistilBERT generates contextual hidden representations. Unlike TF-IDF or a
+   fixed word embedding, the representation of a word changes according to
+   its surrounding words.
+4. A sequence-classification head is fine-tuned for negative, neutral, and
+   positive labels.
+5. The model is trained with cross-entropy loss and evaluated using accuracy
+   and macro-F1.
+
+The transformer uses up to 128 tokens during training and up to 160 tokens
+during dashboard inference. Its token embeddings and hidden representations
+are pretrained by DistilBERT and then adapted by fine-tuning.
+
+### 8.6 Sentiment model 4: pretrained Twitter-RoBERTa
+
+JanMat can also use
+`cardiffnlp/twitter-roberta-base-sentiment-latest` without local training.
+Its tokenizer creates subword tokens and RoBERTa creates contextual
+representations learned from Twitter-like language. A pretrained
+classification head returns sentiment logits, which are converted to
+probabilities with softmax.
+
+This model is often a strong choice for slang because its pretraining domain
+is closer to social-media text. The model files are downloaded from Hugging
+Face the first time they are used.
+
+### 8.7 Model loading, probabilities, and ensemble
+
+`src/sentiment.py` is the common inference layer:
+
+1. It discovers which model files and Python packages are available.
+2. It loads each model lazily and keeps it in an in-memory cache.
+3. It converts every model's output columns into the shared order
+   negative/neutral/positive.
+4. The predicted label is the class with the largest probability.
+5. Confidence is the largest class probability, rounded to three decimals.
+
+When at least two models are available, the ensemble averages their complete
+probability vectors:
+
+```text
+ensemble = average(all available model probabilities)
+prediction = argmax(ensemble)
+```
+
+This is probability averaging, not a new embedding model or a separately
+trained classifier. It can reduce errors when individual models disagree.
+
+### 8.8 Topic analysis
+
+Topic analysis is separate from sentiment classification:
+
+1. Comments are cleaned with the standard cleaner.
+2. A second `TfidfVectorizer` converts comments into topic feature vectors.
+3. English stop words and consultation-specific words are removed.
+4. K-means groups similar vectors.
+5. If the user chooses automatic topics, cluster counts from 3 to 6 are
+   tested and the highest silhouette score is selected.
+6. The three highest-weighted terms in each cluster become its topic name.
+
+Topics therefore use TF-IDF plus K-means; they do not use the Bi-LSTM,
+DistilBERT, or RoBERTa embeddings.
+
+### 8.9 Extractive summarization
+
+Summarization is also independent of the sentiment models:
+
+1. Comments are split into sentences.
+2. Very short and duplicate sentences are removed.
+3. TF-IDF converts the remaining sentences into vectors.
+4. Each sentence is scored by cosine similarity to the group centroid.
+5. Highly repetitive sentences are skipped.
+6. The best sentences are returned in their original order.
+
+The summary is extractive: JanMat selects sentences already written by users
+and does not generate new claims with an LLM.
+
+### 8.10 Runtime application flow
+
+The dashboard follows this sequence:
+
+```text
+CSV or typed comment
+  -> Flask API or Streamlit interface
+  -> preprocessing and slang expansion
+  -> selected sentiment model
+  -> sentiment probabilities and confidence
+  -> TF-IDF/K-means topic analysis
+  -> extractive concern and support summaries
+  -> JSON response or rendered dashboard
+```
+
+The browser interface does not run the Python neural models itself. It sends
+comments to `web_app.py`, which calls the shared Python inference functions.
+The browser-only fallback supports the exported baseline model but not the
+Bi-LSTM or transformer models.
+
+### 8.11 Models not currently included
+
+JanMat does not currently use Qwen, Kimi, or another generative large
+language model. No external LLM API is called during prediction. The
+implemented models are the TF-IDF baseline, Bi-LSTM, optional fine-tuned
+DistilBERT, and optional pretrained Twitter-RoBERTa. Qwen or Kimi could be
+added later as an independently evaluated classifier or ensemble member, but
+they would introduce additional model downloads or API cost, latency, and
+privacy considerations.
