@@ -6,6 +6,7 @@ formal and often long, so we also train on formal / longer text. All labels are 
 
   source          what it is                                  classes mapped from
   tweet_eval      real tweets (SemEval-2017 Task 4)           negative/neutral/positive
+  sentiment140    large Twitter corpus with distant labels    0 -> negative, 2 -> neutral, 4 -> positive
   twitter_fin     finance news tweets (zeroshot)              bearish -> neg, bullish -> pos, neutral
   sst5            Stanford Sentiment Treebank (movie text)    very neg + neg -> neg, neutral, pos + very pos -> pos
   fin_phrasebank  formal financial news sentences             negative/neutral/positive
@@ -71,6 +72,71 @@ def _tweet_eval():
     return {"train": g("train"), "val": g("validation"), "test": g("test")}
 
 
+def _sentiment140():
+    """Load the large, emoticon-labelled Twitter corpus.
+
+    Sentiment140 commonly stores labels as 0, 2, and 4. Some mirrors expose
+    names instead, so support both representations.
+    """
+    from datasets import load_dataset
+    try:
+        ds = load_dataset("stanfordnlp/sentiment140")
+    except Exception as err:
+        print(f"      Hugging Face mirror unavailable ({type(err).__name__}); using the original CSV archive.")
+        return _sentiment140_csv()
+
+    def label_ids(split):
+        names = getattr(split.features.get("sentiment"), "names", None)
+        if names:
+            mapping = {}
+            for index, name in enumerate(names):
+                value = str(name).lower()
+                if value in NAME_TO_ID:
+                    mapping[index] = NAME_TO_ID[value]
+                elif value in {"0", "2", "4"}:
+                    mapping[index] = {"0": 0, "2": 1, "4": 2}[value]
+                else:
+                    mapping[index] = None
+            if any(value is None for value in mapping.values()):
+                raise ValueError(f"Unsupported Sentiment140 labels: {names}")
+            return [mapping[int(value)] for value in split["sentiment"]]
+        raw = split["sentiment"]
+        return [{0: 0, 2: 1, 4: 2}[int(value)] for value in raw]
+
+    def g(name):
+        split = ds[name]
+        text_column = "text" if "text" in split.column_names else "sentences"
+        return _df(split[text_column], label_ids(split), "sentiment140")
+
+    train_name = "train" if "train" in ds else list(ds.keys())[0]
+    test_name = "test" if "test" in ds else ("validation" if "validation" in ds else train_name)
+    train = g(train_name)
+    test = g(test_name)
+    if train_name == test_name:
+        return _split_all(train)
+    tr, va = _train_val(train)
+    return {"train": tr, "val": va, "test": test}
+
+
+def _sentiment140_csv():
+    """Fallback for datasets versions that no longer execute HF dataset scripts."""
+    import io
+    import urllib.request
+    import zipfile
+
+    url = "https://cs.stanford.edu/people/alecmgo/trainingandtestdata.zip"
+    columns = ["sentiment", "id", "date", "query", "user", "text"]
+    archive = urllib.request.urlopen(url, timeout=60).read()
+    with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
+        train_name = next(name for name in zipped.namelist() if "training" in name.lower())
+        train = pd.read_csv(zipped.open(train_name), header=None, names=columns,
+                            usecols=["sentiment", "text"], encoding="latin-1")
+    train = _df(train["text"], train["sentiment"].map({0: 0, 2: 1, 4: 2}), "sentiment140")
+    train = train.sample(n=min(len(train), MAX_PER_SOURCE * 3), random_state=42)
+    tr, va = _train_val(train)
+    return {"train": tr, "val": va, "test": va.copy()}
+
+
 def _twitter_fin():
     from datasets import load_dataset
     ds = load_dataset("zeroshot/twitter-financial-news-sentiment")
@@ -129,7 +195,7 @@ def _own_data():
     return parts
 
 
-LOADERS = {"tweet_eval": _tweet_eval, "twitter_fin": _twitter_fin, "sst5": _sst5,
+LOADERS = {"tweet_eval": _tweet_eval, "sentiment140": _sentiment140, "twitter_fin": _twitter_fin, "sst5": _sst5,
            "fin_phrasebank": _fin_phrasebank, "yelp": _yelp, "imdb": _imdb, "own_data": _own_data}
 
 

@@ -1,70 +1,75 @@
 {
   "combined_test": {
-    "accuracy": 0.6921,
-    "macro_f1": 0.6924,
+    "accuracy": 0.683,
+    "macro_f1": 0.6735,
     "confusion_matrix": [
       [
-        2946,
-        879,
-        396
+        4096,
+        777,
+        854
       ],
       [
-        707,
-        2632,
-        633
+        812,
+        2273,
+        887
       ],
       [
-        502,
-        605,
-        2788
+        830,
+        620,
+        3930
       ]
     ]
   },
   "per_source": {
     "imdb": {
       "n": 1499,
-      "accuracy": 0.8005,
-      "macro_f1": 0.5342
+      "accuracy": 0.7819,
+      "macro_f1": 0.5243
+    },
+    "sentiment140": {
+      "n": 2991,
+      "accuracy": 0.7476,
+      "macro_f1": 0.5083
     },
     "sst5": {
       "n": 2210,
-      "accuracy": 0.6452,
-      "macro_f1": 0.5701
+      "accuracy": 0.6244,
+      "macro_f1": 0.5305
     },
     "tweet_eval": {
       "n": 3000,
-      "accuracy": 0.5837,
-      "macro_f1": 0.5646
+      "accuracy": 0.5393,
+      "macro_f1": 0.5381
     },
     "twitter_fin": {
       "n": 2379,
-      "accuracy": 0.7604,
-      "macro_f1": 0.6674
+      "accuracy": 0.7268,
+      "macro_f1": 0.6328
     },
     "yelp": {
       "n": 3000,
-      "accuracy": 0.7267,
-      "macro_f1": 0.6549
+      "accuracy": 0.7213,
+      "macro_f1": 0.6652
     }
   },
   "econsultation_sample": {
-    "accuracy": 0.6528,
-    "macro_f1": 0.583,
+    "accuracy": 0.6944,
+    "macro_f1": 0.6715,
     "confusion_matrix": [
       [
-        129,
+        127,
+        40,
+        1
+      ],
+      [
+        16,
+        83,
+        2
+      ],
+      [
+        12,
         39,
-        0
-      ],
-      [
-        14,
-        87,
-        0
-      ],
-      [
-        18,
-        54,
-        19
+        40
       ]
     ]
   }

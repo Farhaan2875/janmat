@@ -21,7 +21,7 @@ MODEL_BERT = "DistilBERT (fine-tuned)"
 
 # ---- Training data sources (see src/data_loader.py) ----
 # Remove a name from this list to leave that dataset out.
-SOURCES = ["tweet_eval", "twitter_fin", "sst5", "fin_phrasebank", "yelp", "imdb"]
+SOURCES = ["tweet_eval", "sentiment140", "twitter_fin", "sst5", "fin_phrasebank", "yelp", "imdb"]
 MAX_PER_SOURCE = 30_000     # cap per dataset so one big dataset cannot drown the others
 EXTRA_DIR = DATA_DIR / "extra_labeled"   # drop your own labelled CSVs here (text,label)
 EXTRA_REPEAT = 3            # your own comments are copied this many times in training

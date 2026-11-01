@@ -284,6 +284,7 @@ order `0 = negative`, `1 = neutral`, `2 = positive`:
 | Dataset | Purpose | Label mapping |
 |---|---|---|
 | `cardiffnlp/tweet_eval` (`sentiment`) | Real-world social-media posts and slang | Negative, neutral, positive |
+| `stanfordnlp/sentiment140` | Large Twitter corpus with informal language, abbreviations, and slang | 0 → negative, 2 → neutral, 4 → positive |
 | `zeroshot/twitter-financial-news-sentiment` | Short financial and market-related posts | Bearish → negative, neutral → neutral, bullish → positive |
 | `SetFit/sst5` | Stanford Sentiment Treebank sentences | Very negative/negative → negative, neutral → neutral, positive/very positive → positive |
 | `takala/financial_phrasebank` | Formal financial-news sentences | Negative, neutral, positive |
@@ -295,6 +296,11 @@ training. Dataset downloads are optional: if a source cannot be downloaded,
 the loader skips it and continues with the remaining sources. In the latest
 training run, `financial_phrasebank` was skipped because the installed
 Hugging Face datasets version no longer supports its dataset script.
+
+Sentiment140 uses distant supervision: its original labels are generated from
+tweet emoticons rather than human annotation. It improves exposure to informal
+language, but its labels can be noisy, so TweetEval and the consultation
+sample remain important evaluation sources.
 
 Additional labelled comments can be added under `data/extra_labeled/`; these
 are included as `own_data` and repeated during training to emphasize the
