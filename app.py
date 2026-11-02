@@ -8,7 +8,7 @@ from wordcloud import STOPWORDS, WordCloud
 
 from src.config import LABELS, MODEL_DIR, SAMPLE_CSV
 from src.preprocess import clean_text
-from src.sentiment import available_models, predict
+from src.sentiment import available_models, model_accuracy, predict
 from src.summarizer import summarize
 from src.topics import STOP_WORDS, cluster_topics
 
@@ -192,6 +192,7 @@ st.markdown(f"""
   <div class="fact"><b>{len(df):,}</b><span>comments analysed</span></div>
   <div class="fact"><b>{df['topic'].nunique()}</b><span>topics found</span></div>
   <div class="fact"><b>{df['confidence'].mean():.0%}</b><span>average model confidence</span></div>
+  <div class="fact"><b>{'—' if model_accuracy(model_name) is None else f'{model_accuracy(model_name):.0%}'}</b><span>model accuracy (evaluated)</span></div>
   <div class="fact"><b>{(df['confidence'] < 0.6).sum():,}</b><span>comments to check by hand (low confidence)</span></div>
   <div class="fact"><b style="font-size:1.05rem;line-height:1.9rem">{hot}</b><span>topic with the highest share of negative comments</span></div>
 </div>

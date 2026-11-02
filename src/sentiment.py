@@ -1,11 +1,13 @@
 """One function the dashboard calls: predict(texts, model_name)."""
 import importlib.util
+from functools import lru_cache
 
 import joblib
 import numpy as np
 import pandas as pd
 
 from src.config import (BASELINE_PATH, BERT_DIR, LABELS, LSTM_PATH, MODEL_BASELINE, MODEL_BERT,
+                        MODEL_DIR,
                         MODEL_ENSEMBLE, MODEL_LSTM, MODEL_PRETRAINED, PRETRAINED_ID)
 from src.preprocess import clean_text, light_clean
 
@@ -35,6 +37,22 @@ def available_models():
     """What the dashboard offers: single models, plus an ensemble when there are at least two."""
     models = single_models()
     return models + [MODEL_ENSEMBLE] if len(models) >= 2 else models
+
+
+@lru_cache(maxsize=1)
+def _comparison_accuracy():
+    path = MODEL_DIR / "model_comparison.csv"
+    if not path.exists():
+        return {}
+    comparison = pd.read_csv(path)
+    if "model" not in comparison.columns or "overall_acc" not in comparison.columns:
+        return {}
+    return dict(zip(comparison["model"], comparison["overall_acc"]))
+
+
+def model_accuracy(model_name):
+    """Return the evaluated overall accuracy for a model, when it is available."""
+    return _comparison_accuracy().get(model_name)
 
 
 def _transformer_probs(source, texts):

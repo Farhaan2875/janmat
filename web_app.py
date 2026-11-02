@@ -11,7 +11,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from src.config import LABELS, SAMPLE_CSV
 from src.preprocess import clean_text
-from src.sentiment import available_models, predict
+from src.sentiment import available_models, model_accuracy, predict
 from src.summarizer import summarize
 from src.topics import cluster_topics
 
@@ -96,6 +96,7 @@ def analyze():
 
         return jsonify({
             "model": model_name,
+            "model_accuracy": model_accuracy(model_name),
             "total": len(rows),
             "average_confidence": sum(row["confidence"] for row in rows) / len(rows),
             "counts": counts,

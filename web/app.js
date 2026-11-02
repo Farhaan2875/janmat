@@ -100,7 +100,9 @@ function render(result) {
     const count = result.counts[label]; const width = count / total * 100;
     return `<div class="mood-segment" style="width:${width}%;background:${palette[label]}">${Math.round(width)}% ${label}<small>${count}</small></div>`;
   }).join('');
+  const accuracy = result.model_accuracy == null ? '—' : `${Math.round(result.model_accuracy * 100)}%`;
   $('facts').innerHTML = [[total.toLocaleString(), 'comments analysed'], [result.topics.length, 'themes found'],
+    [accuracy, 'model accuracy (evaluated)'],
     [`${Math.round(result.average_confidence * 100)}%`, 'average confidence'],
     [result.rows.filter((row) => row.confidence < .6).length, 'comments to review']]
     .map(([value, label]) => `<div class="fact"><strong>${value}</strong><small>${label}</small></div>`).join('');
@@ -158,7 +160,8 @@ async function analyze() {
     const counts = Object.fromEntries(['negative', 'neutral', 'positive'].map((label) => [label, rows.filter((row) => row.sentiment === label).length]));
     const negative = rows.filter((row) => row.sentiment === 'negative').slice(0, 3).map((row) => row.comment).join(' ');
     const positive = rows.filter((row) => row.sentiment === 'positive').slice(0, 3).map((row) => row.comment).join(' ');
-    render({ model: MODEL_NAME, total: rows.length, average_confidence: rows.reduce((sum, row) => sum + row.confidence, 0) / rows.length,
+    render({ model: MODEL_NAME, model_accuracy: 0.707, total: rows.length,
+      average_confidence: rows.reduce((sum, row) => sum + row.confidence, 0) / rows.length,
       counts, topics: makeTopics(rows), summary: { concerns: negative, support: positive }, rows });
   } catch (error) { showError(error.message || 'The record could not be analysed.'); setStatus('Could not read the record'); }
   finally {
