@@ -11,6 +11,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from src.config import LABELS, SAMPLE_CSV
 from src.preprocess import clean_text
+from src.quality import quality_flags
 from src.sentiment import available_models, model_accuracy, predict
 from src.summarizer import summarize
 from src.topics import cluster_topics
@@ -18,6 +19,8 @@ from src.topics import cluster_topics
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
 app = Flask(__name__, static_folder=str(WEB_DIR), static_url_path="")
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_COMMENTS = 10_000
 
 
 @app.after_request
@@ -45,6 +48,11 @@ def _read_comments():
         raw = pd.read_csv(SAMPLE_CSV)
         column = "comment"
     else:
+        upload.stream.seek(0, 2)
+        size = upload.stream.tell()
+        upload.stream.seek(0)
+        if size > MAX_UPLOAD_BYTES:
+            raise ValueError("The CSV is too large. Upload a file up to 10 MB.")
         raw = pd.read_csv(upload)
         text_columns = [c for c in raw.columns if pd.api.types.is_string_dtype(raw[c])]
         if not text_columns:
@@ -56,6 +64,12 @@ def _read_comments():
     raw = raw.dropna(subset=[column]).reset_index(drop=True)
     if len(raw) < 12:
         raise ValueError("At least 12 comments are needed to identify themes.")
+    if len(raw) > MAX_COMMENTS:
+        raise ValueError(f"The CSV contains too many rows. Upload at most {MAX_COMMENTS:,} comments.")
+    raw[column] = raw[column].astype(str).str.strip()
+    raw = raw[raw[column].ne("")].reset_index(drop=True)
+    if len(raw) < 12:
+        raise ValueError("At least 12 non-empty comments are needed to identify themes.")
     return raw, column
 
 
@@ -70,16 +84,20 @@ def analyze():
         k = None if requested_topics == "auto" else int(requested_topics)
         comments = raw[column].astype(str).tolist()
         result = predict(comments, model_name)
+        confidences = result["confidence"].tolist()
+        quality, quality_summary = quality_flags(comments, confidences)
         cleaned = [clean_text(comment) for comment in comments]
         topic_ids, topic_names = cluster_topics(cleaned, k)
 
         rows = []
         for i, comment in enumerate(comments):
+            row_quality = quality[i]
             rows.append({
                 "comment": comment,
                 "sentiment": result.iloc[i]["sentiment"],
                 "confidence": float(result.iloc[i]["confidence"]),
                 "topic": topic_names[topic_ids[i]],
+                **row_quality,
             })
 
         counts = {label: sum(row["sentiment"] == label for row in rows) for label in LABELS}
@@ -105,6 +123,7 @@ def analyze():
                 "concerns": summarize([r["comment"] for r in rows if r["sentiment"] == "negative"]),
                 "support": summarize([r["comment"] for r in rows if r["sentiment"] == "positive"]),
             },
+            "quality": quality_summary,
             "rows": rows,
         })
     except (ValueError, KeyError) as error:
@@ -124,7 +143,9 @@ def predict_one():
     if model_name not in available_models():
         return jsonify({"error": "Select an available model."}), 400
     try:
-        return jsonify(predict([comment], model_name).iloc[0].to_dict())
+        prediction = predict([comment], model_name).iloc[0].to_dict()
+        quality, _ = quality_flags([comment], [prediction["confidence"]])
+        return jsonify({**prediction, **quality[0]})
     except Exception:
         app.logger.exception("Single comment prediction failed")
         return jsonify({"error": "The comment could not be classified."}), 500

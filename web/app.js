@@ -104,8 +104,16 @@ function render(result) {
   $('facts').innerHTML = [[total.toLocaleString(), 'comments analysed'], [result.topics.length, 'themes found'],
     [accuracy, 'model accuracy (evaluated)'],
     [`${Math.round(result.average_confidence * 100)}%`, 'average confidence'],
-    [result.rows.filter((row) => row.confidence < .6).length, 'comments to review']]
+    [result.rows.filter((row) => row.review_required).length, 'comments to review']]
     .map(([value, label]) => `<div class="fact"><strong>${value}</strong><small>${label}</small></div>`).join('');
+  const quality = result.quality;
+  $('quality').hidden = !quality;
+  if (quality) {
+    $('quality').textContent = `${quality.unique_comments.toLocaleString()} unique comments. `
+      + `${quality.duplicate_comments.toLocaleString()} comments are exact or near-duplicates`
+      + ` across ${quality.campaign_groups.toLocaleString()} repeated campaign group(s). `
+      + 'Review flagged rows before using counts for policy decisions.';
+  }
   $('concerns').textContent = result.summary.concerns || 'Not enough comments to summarise.';
   $('support').textContent = result.summary.support || 'Not enough comments to summarise.';
   $('topics-chart').innerHTML = result.topics.map((topic) => {
@@ -119,10 +127,13 @@ function render(result) {
 function renderRows() {
   if (!state.result) return;
   const sentiment = $('sentiment-filter').value;
+  const review = $('review-filter').value;
   const search = $('search').value.toLowerCase();
   const rows = state.result.rows.filter((row) =>
-    (!sentiment || row.sentiment === sentiment) && (!search || row.comment.toLowerCase().includes(search)));
-  $('rows').innerHTML = rows.map((row) => `<tr><td>${escapeHtml(row.comment)}</td><td><span class="badge ${row.sentiment}">${row.sentiment}</span></td><td>${Math.round(row.confidence * 100)}%</td><td>${escapeHtml(row.topic)}</td></tr>`).join('');
+    (!sentiment || row.sentiment === sentiment)
+    && (!review || (review === 'review' ? row.review_required : !row.review_required))
+    && (!search || row.comment.toLowerCase().includes(search)));
+  $('rows').innerHTML = rows.map((row) => `<tr><td>${escapeHtml(row.comment)}</td><td><span class="badge ${row.sentiment}">${row.sentiment}</span></td><td>${Math.round(row.confidence * 100)}%</td><td>${escapeHtml(row.topic)}</td><td>${row.review_required ? `<span class="review-flag" title="${escapeHtml(row.review_reasons.join(', '))}">Review</span>` : '—'}</td></tr>`).join('');
 }
 
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char])); }
@@ -162,7 +173,13 @@ async function analyze() {
     const positive = rows.filter((row) => row.sentiment === 'positive').slice(0, 3).map((row) => row.comment).join(' ');
     render({ model: MODEL_NAME, model_accuracy: 0.707, total: rows.length,
       average_confidence: rows.reduce((sum, row) => sum + row.confidence, 0) / rows.length,
-      counts, topics: makeTopics(rows), summary: { concerns: negative, support: positive }, rows });
+      counts, topics: makeTopics(rows), summary: { concerns: negative, support: positive },
+      quality: { unique_comments: new Set(rows.map((row) => cleanText(row.comment))).size,
+        duplicate_comments: 0, campaign_groups: 0 }, rows: rows.map((row) => ({
+          ...row, duplicate_group: null, duplicate_count: 1,
+          review_required: row.confidence < .6,
+          review_reasons: row.confidence < .6 ? ['low model confidence'] : [],
+        })) });
   } catch (error) { showError(error.message || 'The record could not be analysed.'); setStatus('Could not read the record'); }
   finally {
     $('analyze').disabled = false;
@@ -197,7 +214,7 @@ async function classify() {
 
 function download() {
   if (!state.result) return;
-  const header = ['comment', 'sentiment', 'confidence', 'topic'];
+  const header = ['comment', 'sentiment', 'confidence', 'topic', 'duplicate_count', 'review_required', 'review_reasons'];
   const csv = [header, ...state.result.rows.map((row) => header.map((key) => `"${String(row[key] || '').replaceAll('"', '""')}"`))]
     .map((row) => row.join(',')).join('\n');
   const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -207,5 +224,5 @@ function download() {
 $('source').addEventListener('change', () => { const upload = $('source').value === 'upload'; $('file').hidden = !upload; $('file-name').textContent = upload ? 'No file selected' : 'Using the built-in consultation record'; });
 $('file').addEventListener('change', () => { $('file-name').textContent = $('file').files[0]?.name || 'No file selected'; });
 $('analyze').addEventListener('click', analyze); $('classify').addEventListener('click', classify); $('download').addEventListener('click', download);
-$('sentiment-filter').addEventListener('change', renderRows); $('search').addEventListener('input', renderRows);
+$('sentiment-filter').addEventListener('change', renderRows); $('review-filter').addEventListener('change', renderRows); $('search').addEventListener('input', renderRows);
 loadModels();

@@ -245,6 +245,13 @@ The Flask server provides:
 - Topic totals and sentiment breakdown.
 - Extractive concern and support summaries.
 - A row for every comment.
+- Data-quality metadata: unique/duplicate counts, repeated campaign-style
+  groups, and row-level review reasons (low confidence or duplicate text).
+
+Uploaded files are bounded to 10 MB and 10,000 rows. Exact and near-duplicate
+comments are flagged for human review rather than silently removed, preserving
+the public record while preventing repeated submissions from being mistaken
+for independent evidence.
 
 ### 2.2 `web/app.js`
 
@@ -255,11 +262,29 @@ The JavaScript frontend:
 - Sends one comment to `/api/predict`.
 - Renders the mood bar, facts, summaries, topics, and table.
 - Supports sentiment filtering and comment search.
+- Flags exact/near-duplicate and low-confidence comments for human review.
 - Exports the displayed results as CSV.
 
 When the Python server is unavailable, the page can fall back to the exported
 baseline model in `browser_model.js`. The browser-only fallback does not run
 the Bi-LSTM or BERT models.
+
+### 2.4 Industry-standard readiness improvements
+
+Compared with a typical sentiment-analysis demo, JanMat now preserves the
+original record while adding the review controls expected in a human-in-the-
+loop analytics workflow:
+
+| Practice | JanMat behavior |
+|---|---|
+| Data quality | Exact and near-duplicate comments are grouped and flagged; repeated groups are reported as campaign-style text. |
+| Human oversight | Low-confidence and duplicate rows receive explicit review reasons and can be filtered before export. |
+| Reproducibility | The selected model, evaluated accuracy, topic settings, row-level predictions, and quality metadata are returned together. |
+| Operational safety | Uploaded CSVs are limited to 10 MB and 10,000 rows, with clear validation errors. |
+
+These safeguards do not silently delete or down-weight public comments. They
+make possible repetition visible so a policy team can decide how to interpret
+it, which is safer than treating model output as an automated decision.
 
 ### 2.3 `app.py`
 

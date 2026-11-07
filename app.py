@@ -8,6 +8,7 @@ from wordcloud import STOPWORDS, WordCloud
 
 from src.config import LABELS, MODEL_DIR, SAMPLE_CSV
 from src.preprocess import clean_text
+from src.quality import quality_flags
 from src.sentiment import available_models, model_accuracy, predict
 from src.summarizer import summarize
 from src.topics import STOP_WORDS, cluster_topics
@@ -169,6 +170,9 @@ if len(raw) < 12:
 result = analyse(tuple(raw[comment_col].astype(str)), model_name, k)
 df = pd.concat([raw.drop(columns=[c for c in ["sentiment", "confidence", "topic"] if c in raw.columns]), result.drop(columns="comment")], axis=1)
 df["comment"] = raw[comment_col].astype(str)
+quality, quality_summary = quality_flags(df["comment"].tolist(), df["confidence"].tolist())
+quality_df = pd.DataFrame(quality)
+df = pd.concat([df.reset_index(drop=True), quality_df], axis=1)
 
 # ----------------------------------------------------------------- overview
 counts = df["sentiment"].value_counts().reindex(["negative", "neutral", "positive"], fill_value=0)
@@ -193,10 +197,14 @@ st.markdown(f"""
   <div class="fact"><b>{df['topic'].nunique()}</b><span>topics found</span></div>
   <div class="fact"><b>{df['confidence'].mean():.0%}</b><span>average model confidence</span></div>
   <div class="fact"><b>{'—' if model_accuracy(model_name) is None else f'{model_accuracy(model_name):.0%}'}</b><span>model accuracy (evaluated)</span></div>
-  <div class="fact"><b>{(df['confidence'] < 0.6).sum():,}</b><span>comments to check by hand (low confidence)</span></div>
+  <div class="fact"><b>{int(df['review_required'].sum()):,}</b><span>comments to check by hand (quality flags)</span></div>
   <div class="fact"><b style="font-size:1.05rem;line-height:1.9rem">{hot}</b><span>topic with the highest share of negative comments</span></div>
 </div>
 """, unsafe_allow_html=True)
+st.info(f"{quality_summary['unique_comments']:,} unique comments; "
+        f"{quality_summary['duplicate_comments']:,} exact or near-duplicate rows in "
+        f"{quality_summary['campaign_groups']:,} repeated campaign group(s). "
+        "Review flagged rows before using counts for policy decisions.")
 
 # ----------------------------------------------------------------- briefing
 st.markdown('<div class="section">A brief from the record</div>', unsafe_allow_html=True)
@@ -250,11 +258,14 @@ pick_s = f1.multiselect("Sentiment", LABELS, default=LABELS)
 pick_t = f2.multiselect("Topic", sorted(df.topic.unique()), default=sorted(df.topic.unique()))
 word = f3.text_input("Contains the word")
 review_only = st.checkbox("Flag uncertain comments for a human read (confidence below 60%)")
+quality_only = st.checkbox("Show all quality flags (duplicates and low confidence)")
 view = df[df.sentiment.isin(pick_s) & df.topic.isin(pick_t)]
 if word:
     view = view[view.comment.str.contains(word, case=False, regex=False)]
 if review_only:
     view = view[view.confidence < 0.6]
+if quality_only:
+    view = view[view.review_required]
 st.dataframe(view, width="stretch", height=330)
 st.download_button("Download results as CSV", view.to_csv(index=False).encode("utf-8"), "janmat_results.csv", "text/csv")
 
